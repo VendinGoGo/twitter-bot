@@ -1,0 +1,3 @@
+tweepy,pip install tweepy,http://tweepy.readthedocs.org/en/v3.5.0/getting_started.html#introduction
+yaml,pip install pyyaml,http://pyyaml.org/wiki/PyYAML
+MySQLdb,pip install MySQL-python,http://mysql-python.sourceforge.net/MySQLdb.html
