@@ -48,9 +48,35 @@ class Bot():
         mentions = self.api.search(q=query)
         # Iterate through
         for tweet in mentions:
+            # Define variables
             user = str(tweet.user.screen_name) #.encode('utf8'))
             text = str(tweet.text) #.encode('utf8'))
-            print(user + " >> " + text)
+            # Reset variables
+            location = None
+            coords = None
+            place = None
+
+            # Add each location element found on the tweet object
+            if tweet.user.location and tweet.user.location is not "":
+                location = str(tweet.user.location)
+            if tweet.coordinates:
+                coords = str(tweet.coordinates)
+            if tweet.place:
+                place = str(tweet.place.bounding_box.coordinates)
+
+            # Print two new lines for readability
+            print("")
+            print("")
+            # Print the tweet
+            print(user + ": " + text)
+            # Print location info found
+            if location:
+                print("-- Location:" + location)
+            if coords:
+                print("-- Coordinates:" + coords)
+            if place:
+                print("-- Place:" + place)
+
 
 if __name__ == "__main__":
     # Create a bot
