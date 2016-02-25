@@ -41,20 +41,22 @@ class Bot():
             result = yaml.load(stream)
         return result
 
-    def load_mentions(self, user="VendinGoGo"):
-        # Generate query
+    def load_mentions(self, user="VendinGoGo", display=False):
+        # Define variables
+        mentions = []
         query = "@" + user # "@VendinGoGo" by default
         # Load mentions
-        mentions = self.api.search(q=query)
+        api_mentions = self.api.search(q=query)
         # Iterate through
-        for tweet in mentions:
+        for tweet in api_mentions:
             # Define variables
+            item = {}
             user = str(tweet.user.screen_name) #.encode('utf8'))
             text = str(tweet.text) #.encode('utf8'))
             # Reset variables
-            location = None
-            coords = None
-            place = None
+            location = ''
+            coords = ''
+            place = ''
 
             # Add each location element found on the tweet object
             if tweet.user.location and tweet.user.location is not "":
@@ -64,23 +66,89 @@ class Bot():
             if tweet.place:
                 place = str(tweet.place.bounding_box.coordinates)
 
-            # Print two new lines for readability
-            print("")
-            print("")
-            # Print the tweet
-            print(user + ": " + text)
-            # Print location info found
-            if location:
-                print("-- Location:" + location)
-            if coords:
-                print("-- Coordinates:" + coords)
-            if place:
-                print("-- Place:" + place)
+            # Build item
+            item["user"] = user
+            item["text"] = text
+            item["location"] = location
+            item["coords"] = coords
+            item["place"] = place
+            # Append to mentions
+            mentions.append(item)
 
+        # Optionally, print mentions
+        if display:
+            for each in mentions:
+                # Get tweet information
+                user = each["user"]
+                text = each["text"]
+                location = each["location"]
+                coords = each["coords"]
+                place = each["place"]
+
+                # Print the tweet
+                print(user + ": " + text)
+                # Print location info found
+                if location:
+                    print("-- Location:" + location)
+                if coords:
+                    print("-- Coordinates:" + coords)
+                if place:
+                    print("-- Place:" + place)
+
+                # Print two new lines for readability
+                print("")
+                print("")
+
+        # Return
+        return mentions
 
 if __name__ == "__main__":
     # Create a bot
     bot = Bot()
 
     # Load mentions
-    bot.load_mentions()
+    dicts = bot.load_mentions(display=False)
+
+    ## Debug Notedb
+    mentions = []
+    for each in dicts:
+        new_item = []
+        new_item.append(each["user"])
+        new_item.append(each["text"])
+        new_item.append(each["coords"])
+        new_item.append(each["location"])
+        new_item.append(each["place"])
+        mentions.append(new_item)
+
+    ## Debug note
+    # import Notedb
+    from Notedb import Note
+    # Create Note
+    note = Note(
+        databaseName = "Mentions",
+        schema       = ["User","Text","Coordinates","Location","Place"])
+    # Load existing tweets
+    note.openNote()
+    # Save new tweets
+    # DEBUG
+    newtweet = ['1', '2', '3', '4', '5']
+    mentions.append(newtweet)
+    # Handle null strings
+    for eachRow in mentions:
+        for eachItem in eachRow:
+            if eachItem == None:
+                eachItem = ''
+
+    for each in mentions:
+        # If tweet is not found
+        found = False
+        for eachRow in note.tables[0]:
+            if set(each) == set(eachRow):
+                # If a match is found
+                found = True
+                break
+        if not found:
+            # Append it to the table
+            note.tables[0].append(each)
+    # Save note
+    note.saveNote()

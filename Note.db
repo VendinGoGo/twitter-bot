@@ -1,0 +1,16 @@
+Mentions
+========
+Entry Schema
+------------
+User,Text,Coordinates,Location,Place
+------------------------------------
+$start
+_zyeri,@VendinGoGo testing precise Twitter location,"{'type': 'Point', 'coordinates': [-88.7902334, 33.4577453]}","Starkville, MS","[[[-88.789658, 33.456867], [-88.789658, 33.456867], [-88.789658, 33.456867], [-88.789658, 33.456867]]]"
+itwasyellow,@VendinGoGo  Testing exact location!,"{'type': 'Point', 'coordinates': [-88.7902334, 33.4577453]}",Mississippi State University,"[[[-88.7905, 33.45632], [-88.7905, 33.45632], [-88.7905, 33.45632], [-88.7905, 33.45632]]]"
+itwasyellow,@VendinGoGo Pepsi and snack machine in Butler lounge. Walk past elevator on the right and go straight down to the end of the hallway.,,Mississippi State University,
+Blond_in_Blue,@VendinGoGo tweet with location,,,"[[[-88.79021644592285, 33.45766277049654], [-88.79021644592285, 33.45766277049654], [-88.79021644592285, 33.45766277049654], [-88.79021644592285, 33.45766277049654]]]"
+itwasyellow,RT @VendinGoGo: VendinGoGo coming soon to a campus near you! #VendinGoGo,,Mississippi State University,
+1,2,3,4,5
+_zyeri,@VendinGoGo testing precise Twitter location,"{'coordinates': [-88.7902334, 33.4577453], 'type': 'Point'}","Starkville, MS","[[[-88.789658, 33.456867], [-88.789658, 33.456867], [-88.789658, 33.456867], [-88.789658, 33.456867]]]"
+itwasyellow,@VendinGoGo  Testing exact location!,"{'coordinates': [-88.7902334, 33.4577453], 'type': 'Point'}",Mississippi State University,"[[[-88.7905, 33.45632], [-88.7905, 33.45632], [-88.7905, 33.45632], [-88.7905, 33.45632]]]"
+$end
