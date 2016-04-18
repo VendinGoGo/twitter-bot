@@ -162,7 +162,6 @@ class MyStreamListener(tweepy.StreamListener):
                     location_info = "place"
             except:
                 print("--place is empty")
-                pass
         if status.coordinates:
             print("-Coordinates exists")
             try:
@@ -170,11 +169,8 @@ class MyStreamListener(tweepy.StreamListener):
                     location_info = "coordinates"
             except:
                 print("--coordinates are empty")
-                pass
         if not location_info:
             print("-No location information found")
-            # print(status)
-            return
 
         # Gather most accurate location of tweet available
         tweet_location = None
@@ -189,10 +185,6 @@ class MyStreamListener(tweepy.StreamListener):
         if location_info == "coordinates":
             if len(status.coordinates) > 0:
                 # Most precise location
-                try:
-                    print(status.coordinates)
-                except:
-                    print(str(status.coordinates))
                 tweet_location = (status.coordinates['coordinates'][0], status.coordinates['coordinates'][1])
             else:
                 print("-No coordinates found")

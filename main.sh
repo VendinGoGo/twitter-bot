@@ -1,4 +1,5 @@
 #!/bin/bash
+cd /home/josh/twitter-bot
 python main.py $*
 while [ 1 ]
 do
