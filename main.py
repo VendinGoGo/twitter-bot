@@ -261,7 +261,7 @@ class MyStreamListener(tweepy.StreamListener):
 
 if __name__ == "__main__":
     # Create a bot
-    create_bot()
+    bot = Bot()
 
     #
     # Debug
