@@ -29,6 +29,7 @@ class Bot():
 
     def configure_twitter(self, query="@VendinGoGo"):
         self.stream_listener = MyStreamListener()
+        self.stream_listener.set_parent(self)
         self.stream = tweepy.Stream(auth=self.auth, listener=self.stream_listener)
         self.query = query
 
@@ -137,9 +138,12 @@ class Bot():
 
 #override tweepy.StreamListener to add logic to on_status
 class MyStreamListener(tweepy.StreamListener):
+    def set_parent(self, parent):
+        self.parent = parent
+
     def on_status(self, status):
         # Print the message
-        print(str(status.user.name) + ": " + str(status.text))
+        print(str(status.user.screen_name) + ": " + str(status.text))
         # Debug prints
         # print("Full status information", status)
         # print("Now examining status coordinates more closely \n -----------")
@@ -197,17 +201,17 @@ class MyStreamListener(tweepy.StreamListener):
 
         ## Find nearest location from vending machine
         # Execute SQL statement
-        bot.cursor.execute("SELECT id, lat, lng FROM vendinglocation")
+        self.parent.cursor.execute("SELECT id, lat, lng FROM vendinglocation")
 
         # Get number of rows in resulting set
-        number_rows = int(bot.cursor.rowcount)
+        number_rows = int(self.parent.cursor.rowcount)
         distance = 350 # Will serve as maximum distance for nearby tweets
         closest = None
 
         # Iterate through all vending machines in database
         for index in range(0, number_rows):
             # Get vending machine location and id
-            row = bot.cursor.fetchone()
+            row = self.parent.cursor.fetchone()
             vending_id = row[0]
             vending_location = (row[2], row[1])
 
@@ -231,21 +235,21 @@ class MyStreamListener(tweepy.StreamListener):
             body = re.sub('@VendinGoGo', '', status.text)
             print("--Tweet content less @VendinGoGo: " + body)
             ## Get user ID of poster
-            user = bot.api.get_user(screen_name=status.user)
+            user = self.parent.api.get_user(screen_name=status.user.screen_name)
             user_id = user.id
             ## Check if they are registered with us
             # Execute SQL statement
-            bot.cursor.execute("SELECT * FROM users WHERE id=" + str(user_id))
-            number_rows = int(bot.cursor.rowcount)
+            self.parent.cursor.execute("SELECT * FROM users WHERE id=" + str(user_id))
+            number_rows = int(self.parent.cursor.rowcount)
             if number_rows == 0:
                 # User is not registered; do that now
                 print("--Registered user " + str(user.name))
-                bot.cursor.execute("INSERT INTO users (id, name, oauth) VALUES (" + str(user_id) + ", " + str(user.name) + ", " + str(0) + ")")
-                bot.db.commit()
+                self.parent.cursor.execute("INSERT INTO users (id, name, oauth) VALUES (" + str(user_id) + ", " + str(user.name) + ", " + str(0) + ")")
+                self.parent.db.commit()
             ## Post status
             print("-Updated status")
-            bot.cursor.execute("INSERT INTO statuses (userId, vendingId, comment) VALUES (" + str(user_id) + ", " + str(closest) + ", \"" + str(body) + "\")")
-            bot.db.commit()
+            self.parent.cursor.execute("INSERT INTO statuses (userId, vendingId, comment) VALUES (" + str(user_id) + ", " + str(closest) + ", \"" + str(body) + "\")")
+            self.parent.db.commit()
         else:
             # Was not close enough to a vending location
             print("-Was not near a vending machine")
@@ -255,15 +259,13 @@ class MyStreamListener(tweepy.StreamListener):
             #returning False in on_data disconnects the stream
             return False
 
-def create_bot():
-    global bot
-    bot = None
-    bot = Bot()
-    return
-
 if __name__ == "__main__":
     # Create a bot
     create_bot()
+
+    #
+    # Debug
+    #
 
     #
     # Debug
