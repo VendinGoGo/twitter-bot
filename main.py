@@ -2,6 +2,8 @@ import tweepy
 import yaml
 import MySQLdb
 from geopy.distance import vincenty
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import ast
 import re
 
@@ -16,18 +18,18 @@ class Bot():
         self.auth.set_access_token(tokens['access_token'], tokens['access_token_secret'])
         self.api = tweepy.API(self.auth)
 
+        ## Configure bot
         # Configure database
         self.configure_db(tokens['host'], tokens['user'], tokens['password'], tokens['database'])
         # Configure Twitter
         self.configure_twitter()
 
-        # Start Twitter Stream
-        self.start_twitter()
-
     def start_twitter(self):
+        # Begin twitter stream by passing self.query to stream.filter
         self.stream.filter(track=[self.query])
 
     def configure_twitter(self, query="@VendinGoGo"):
+        # Configure twtter stream on a given search query
         self.stream_listener = MyStreamListener()
         self.stream_listener.set_parent(self)
         self.stream = tweepy.Stream(auth=self.auth, listener=self.stream_listener)
@@ -38,22 +40,6 @@ class Bot():
         self.db = MySQLdb.connect(host=host, user=user, passwd=password, db=database)
         # Set cursor
         self.cursor = self.db.cursor()
-
-    def test_db(self):
-        ## Debug
-        # Execute SQL statement
-        self.cursor.execute("SELECT * FROM vendinglocation")
-
-        # Commit changes
-        self.db.commit()
-
-        # Get number of rows in resulting set
-        number_rows = int(self.cursor.rowcount)
-
-        # Display each row
-        for each in range(0, number_rows):
-            print(str(self.cursor.fetchone()))
-
 
     def load_config(self, file="config.txt"):
         # Load configurations from file
@@ -128,11 +114,13 @@ class Bot():
         # Define variables
         mentions = []
         query = "@" + user # "@VendinGoGo" by default
+
         # Load mentions
         api_mentions = self.api.search(q=query)
         # Iterate through
         for tweet in api_mentions:
             mentions.append(tweet)
+
         # Return
         return mentions
 
@@ -143,34 +131,26 @@ class MyStreamListener(tweepy.StreamListener):
 
     def on_status(self, status):
         # Print the message
-        print(str(status.user.screen_name) + ": " + str(status.text))
-        # Debug prints
-        # print("Full status information", status)
-        # print("Now examining status coordinates more closely \n -----------")
-        # print("Status[coords]: " + str(status['coords']))
-        # print("Status[coords]['type']: " + str(status['coords']['type']))
-        # print("Status[coords]['coordinates']: " + str(status['coords']['coordinates']))
-        # print("Status[place]: " + str(status['place']))
-        # print("DONE examining status coordinates more closely \n -----------")
+        logger.info(str(status.user.screen_name) + ": " + str(status.text))
 
         # Filter out tweets not containing location data
         location_info = None
         if status.place:
-            print("-place exists")
+            logger.info("-place exists")
             try:
                 if len(status.place) > 0:
                     location_info = "place"
             except:
-                print("--place is empty")
+                logger.info("--place is empty")
         if status.coordinates:
-            print("-Coordinates exists")
+            logger.info("-Coordinates exists")
             try:
                 if len(status.coordinates) > 0:
                     location_info = "coordinates"
             except:
-                print("--coordinates are empty")
+                logger.info("--coordinates are empty")
         if not location_info:
-            print("-No location information found")
+            logger.warn("-No location information found")
 
         # Gather most accurate location of tweet available
         tweet_location = None
@@ -181,15 +161,15 @@ class MyStreamListener(tweepy.StreamListener):
             # Calculate average of every index across the list and convert to tuple
             tweet_location = tuple(x for x in [sum(y) / len(y) for y in zip(*status.place[0])])
         else:
-            print("-No place found")
+            logger.info("-No place found")
         if location_info == "coordinates":
             if len(status.coordinates) > 0:
                 # Most precise location
                 tweet_location = (status.coordinates['coordinates'][0], status.coordinates['coordinates'][1])
             else:
-                print("-No coordinates found")
+                logger.info("-No coordinates found")
         else:
-            print("-No coordinates found")
+            logger.warn("-No coordinates found")
 
         ## Find nearest location from vending machine
         # Execute SQL statement
@@ -215,136 +195,75 @@ class MyStreamListener(tweepy.StreamListener):
                 # Update closest machine variables
                 distance = vincenty(tweet_location, vending_location).miles
                 closest = vending_id
-                print("-Found closer vending machine:" + str(closest))
+                logger.info("-Found closer vending machine:" + str(closest))
 
         # If a vending machine was found close enough
         if closest:
-            print("-We found a closest machine!")
-            print("--Vending machine id: " + str(closest))
+            # Log to console
+            logger.info("-We found a closest machine!")
+            logger.info("--Vending machine id: " + str(closest))
 
             ### Write a status update for it
-            ## Get body text
+            ## Get body text and remove unwanted characters
             body = re.sub('@VendinGoGo', '', status.text)
-            print("--Tweet content less @VendinGoGo: " + body)
+            for x in ['\'', '\"']: # Protect from SQL injection
+                body = re.sub(x, '', body)
+            logger.info("--Status content: " + body)
+
             ## Get user ID of poster
             user = self.parent.api.get_user(screen_name=status.user.screen_name)
             user_id = user.id
+
             ## Check if they are registered with us
             # Execute SQL statement
             self.parent.cursor.execute("SELECT * FROM users WHERE id=" + str(user_id))
             number_rows = int(self.parent.cursor.rowcount)
             if number_rows == 0:
                 # User is not registered; do that now
-                print("--Registered user " + str(user.name))
+                logger.info("--Registered user " + str(user.name))
                 self.parent.cursor.execute("INSERT INTO users (id, name, oauth) VALUES (" + str(user_id) + ", " + str(user.name) + ", " + str(0) + ")")
                 self.parent.db.commit()
+
             ## Post status
-            print("-Updated status")
+            logger.info("-Updated status")
             self.parent.cursor.execute("INSERT INTO statuses (userId, vendingId, comment) VALUES (" + str(user_id) + ", " + str(closest) + ", \"" + str(body) + "\")")
             self.parent.db.commit()
         else:
             # Was not close enough to a vending location
-            print("-Was not near a vending machine")
+            logger.warn("-Was not near a vending machine")
 
     def on_error(self, status_code):
         if status_code == 420:
             #returning False in on_data disconnects the stream
             return False
 
+def create_timed_rotating_log(path):
+    # Create logger
+    logger = logging.getLogger("Rotating Log")
+    logger.setLevel(logging.INFO)
+
+    # Create formatter
+    logFormatter = logging.Formatter("%(asctime)s [%(levelname)-5.5s] %(message)s")
+
+    # Rotating file handler
+    fileHandler = TimedRotatingFileHandler(path, when="midnight", interval=1, backupCount=5)
+    fileHandler.setFormatter(logFormatter)
+    logger.addHandler(fileHandler)
+
+    # Console output handler
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    logger.addHandler(consoleHandler)
+
+    return logger
+
 if __name__ == "__main__":
+    # Create a log file
+    log_file = "logs/twitterbot.log"
+    logger = create_timed_rotating_log(log_file)
+
     # Create a bot
     bot = Bot()
 
-    #
-    # Debug
-    #
-
-    #
-    # Debug
-    #
-
-    # Load mentions
-    # tweets = bot.load_mentions(display=True)
-    # for status in tweets:
-    #     # Print the message
-    #     print(str(status['user']) + ": " + str(status['text']))
-    #     # Debug prints
-    #     # print("Full status information", status)
-    #     # print("Now examining status coordinates more closely \n -----------")
-    #     # print("Status[coords]: " + str(status['coords']))
-    #     # print("Status[coords]['type']: " + str(status['coords']['type']))
-    #     # print("Status[coords]['coordinates']: " + str(status['coords']['coordinates']))
-    #     # print("Status[place]: " + str(status['place']))
-    #     # print("DONE examining status coordinates more closely \n -----------")
-    #
-    #     # Filter out tweets not containing location data
-    #     if len(status['coords']) < 1 and len(status['place']) < 1:
-    #         continue
-    #
-    #     # Gather most accurate location of tweet available
-    #     tweet_location = None
-    #     if status['place']:
-    #         ## Bounding box, calculate middle of region
-    #         # Convert place from string to list
-    #         status['place'] = ast.literal_eval(status['place'])
-    #         # Calculate average of every index across the list and convert to tuple
-    #         tweet_location = tuple(x for x in [sum(y) / len(y) for y in zip(*status['place'][0])])
-    #     else:
-    #         print("-No place found")
-    #     if len(status['coords']) > 0:
-    #         # Most precise location
-    #         tweet_location = (status['coords']['coordinates'][0], status['coords']['coordinates'][1])
-    #     else:
-    #         print("-No coordinates found")
-    #
-    #     ## Find nearest location from vending machine
-    #     # Execute SQL statement
-    #     bot.cursor.execute("SELECT id, lat, lng FROM vendinglocation")
-    #
-    #     # Get number of rows in resulting set
-    #     number_rows = int(bot.cursor.rowcount)
-    #     distance = 200 # Will serve as maximum distance for nearby tweets
-    #     closest = None
-    #
-    #     # Iterate through all vending machines in database
-    #     for index in range(0, number_rows):
-    #         # Get vending machine location and id
-    #         row = bot.cursor.fetchone()
-    #         vending_id = row[0]
-    #         vending_location = (row[2], row[1])
-    #
-    #         # Debug print
-    #         # print("-Vending location @ "+ str(vending_location))
-    #
-    #         # If closer than current closest
-    #         if (vincenty(tweet_location, vending_location).feet < distance):
-    #             # Update closest machine variables
-    #             distance = vincenty(tweet_location, vending_location).miles
-    #             closest = vending_id
-    #             print("-Found closer vending machine:" + str(closest))
-    #
-    #     # If a vending machine was found close enough
-    #     if closest:
-    #         print("-We found a closest machine!")
-    #         print("--Vending machine id: " + str(closest))
-    #
-    #         ### Write a status update for it
-    #         ## Get body text
-    #         body = re.sub('@VendinGoGo', '', status['text'])
-    #         print("--Tweet content less @VendinGoGo: " + body)
-    #         ## Get user ID of poster
-    #         user = bot.api.get_user(screen_name=status['user'])
-    #         user_id = user.id
-    #         ## Check if they are registered with us
-    #         # Execute SQL statement
-    #         bot.cursor.execute("SELECT * FROM users WHERE id=" + str(user_id))
-    #         number_rows = int(bot.cursor.rowcount)
-    #         if number_rows == 0:
-    #             # User is not registered; do that now
-    #             print("--Registered user " + str(user.name))
-    #             bot.cursor.execute("INSERT INTO users (id, name, oauth) VALUES (" + str(user_id) + ", " + str(user.name) + ", " + str(0) + ")")
-    #             bot.db.commit()
-    #         ## Post status
-    #         print("-Updated status")
-    #         bot.cursor.execute("INSERT INTO statuses (userId, vendingId, comment) VALUES (" + str(user_id) + ", " + str(closest) + ", \"" + str(body) + "\")")
-    #         bot.db.commit()
+    # Start Twitter Stream
+    bot.start_twitter()
